@@ -1,12 +1,12 @@
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Program {
     pub name: Identifier,
     pub block: Block,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Block {
     pub condecls: Vec<(Identifier, Integer)>,
     pub vardecls: Vec<Identifier>,
@@ -14,24 +14,24 @@ pub struct Block {
     pub body: Body,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Proc {
     pub name: Identifier,
     pub args: Vec<Identifier>,
     pub block: Block,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Body {
     pub stmts: Vec<Stmt>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Stmt {
     pub v: StmtV,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum StmtV {
     Assign(Identifier, Expr),
     If(LExpr, Box<Stmt>, Box<Stmt>),
@@ -42,43 +42,43 @@ pub enum StmtV {
     Write(Vec<Expr>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct LExpr {
     pub v: LExprV,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum LExprV {
     Lop(Expr, Lop, Expr),
     Odd(Expr),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Expr {
     pub neg: bool,
     pub left_term: Term,
     pub right_term: Option<(Aop, Term)>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Term {
     pub left_factor: Factor,
     pub right_factor: Option<(Mop, Factor)>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Factor {
     pub v: FactorV,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum FactorV {
     Id(Identifier),
     Integer(Integer),
     Expr(Box<Expr>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Lop {
     Eq,
     Ne,
@@ -88,22 +88,22 @@ pub enum Lop {
     Ge,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Aop {
     Add,
     Sub,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Mop {
     Mul,
     Div,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Identifier(pub String);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Integer(pub String);
 
 peg::parser! {
