@@ -1,0 +1,25 @@
+program fib;
+
+var c;
+
+procedure fib(n);
+var l, r;
+begin
+    if n = 1 then
+        c := 1
+    else if n = 2 then
+        c := 1
+    else begin
+        call fib(n - 1);
+        l := c;
+        call fib(n - 2);
+        r := c;
+        c := l + r
+    end
+end
+
+begin
+    read(c);
+    call fib(c);
+    write(c)
+end
