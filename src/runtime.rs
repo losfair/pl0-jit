@@ -2,7 +2,14 @@ use dynasmrt::{ExecutableBuffer, AssemblyOffset};
 
 global_asm!(include_str!("runtime.asm"));
 
+#[cfg(target_os = "macos")]
 extern "C" {
+    fn enter_exec(target: *const u8) -> u64;
+}
+
+#[cfg(not(target_os = "macos"))]
+extern "C" {
+    #[link_name = "_enter_exec"]
     fn enter_exec(target: *const u8) -> u64;
 }
 
