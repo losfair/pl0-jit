@@ -34,7 +34,7 @@ pub struct Stmt {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum StmtV {
     Assign(Identifier, Expr),
-    If(LExpr, Box<Stmt>, Box<Stmt>),
+    If(LExpr, Box<Stmt>, Option<Box<Stmt>>),
     While(LExpr, Box<Stmt>),
     Call(Identifier, Vec<Expr>),
     Body(Body),
@@ -167,7 +167,8 @@ peg::parser! {
         rule stmt_v() -> StmtV
             =
                 l:id() _ ":=" _ r:expr() { StmtV::Assign(l, r) } /
-                "if" _ cond:l_expr() _ "then" _ l:stmt() _ "else" _ r:stmt() { StmtV::If(cond, Box::new(l), Box::new(r)) } /
+                "if" _ cond:l_expr() _ "then" _ l:stmt() _ "else" _ r:stmt() { StmtV::If(cond, Box::new(l), Some(Box::new(r))) } /
+                "if" _ cond:l_expr() _ "then" _ l:stmt() { StmtV::If(cond, Box::new(l), None) } /
                 "while" _ cond:l_expr() _ "do" _ l:stmt() { StmtV::While(cond, Box::new(l)) } /
                 "call" _ t:id() _ "(" _ e:(_ x:expr() _ {x}) ** "," _ ")" { StmtV::Call(t, e) } /
                 "read" _ "(" _ i:(_ x:id() _ {x}) ** "," _ ")" { StmtV::Read(i) } /

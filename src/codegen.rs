@@ -3,18 +3,25 @@ use std::collections::{BTreeSet, BTreeMap};
 use dynasmrt::dynasm;
 use anyhow::Result;
 use thiserror::Error;
-use dynasmrt::{DynasmApi, x64::Assembler, DynasmLabelApi};
+use dynasmrt::{DynasmApi, x64::Assembler, AssemblyOffset, DynamicLabel, DynasmLabelApi};
 use crate::runtime::Executable;
 
 pub struct TranslationState {
     frames: Vec<Frame>,
     a: Assembler,
     next_proc_id: u32,
+    entry: AssemblyOffset,
+
+    read_ext: DynamicLabel,
+    write_ext: DynamicLabel,
 }
 
 pub struct Frame {
     owner_proc: Identifier,
     owner_proc_id: u32,
+    head: DynamicLabel,
+    subprocs: Vec<Frame>,
+    num_args: usize,
     vars: BTreeSet<Identifier>,
     consts: BTreeMap<Identifier, Integer>,
     raw_locations: BTreeMap<Identifier, i32>,
@@ -33,20 +40,42 @@ pub enum CodegenError {
 
     #[error("value not found")]
     ValueNotFound,
+
+    #[error("procedure not found")]
+    ProcNotFound,
+
+    #[error("argument count mismatch")]
+    ArgumentCountMismatch,
 }
 
 impl TranslationState {
     pub fn new() -> Self {
+        let mut a = Assembler::new().unwrap();
+        let read_ext = a.new_dynamic_label();
+        let write_ext = a.new_dynamic_label();
+
+        dynasm!(a
+            ; =>read_ext
+            ; mov rax, QWORD (crate::runtime::do_read as i64)
+            ; jmp rax // tail call
+            ; =>write_ext
+            ; mov rax, QWORD (crate::runtime::do_write as i64)
+            ; jmp rax // tail call
+        );
         TranslationState {
             frames: vec![],
-            a: Assembler::new().unwrap(),
+            a,
             next_proc_id: 1,
+            entry: AssemblyOffset(0),
+            read_ext,
+            write_ext,
         }
     }
 
     pub fn finalize(self) -> Result<Executable> {
         Ok(Executable {
             buffer: self.a.finalize().unwrap(),
+            entry: self.entry,
         })
     }
 
@@ -56,10 +85,11 @@ impl TranslationState {
             args: vec![],
             block: p.block.clone(),
         };
-        self.generate_proc(&root_proc)
+        let root_frame = self.generate_proc(&root_proc)?;
+        Ok(())
     }
 
-    pub fn generate_proc(&mut self, p: &Proc) -> Result<()> {
+    pub fn generate_proc(&mut self, p: &Proc) -> Result<Frame> {
         log::debug!("generate_proc: {}", p.name.0);
         let proc_id = self.next_proc_id;
         self.next_proc_id += 1;
@@ -74,23 +104,40 @@ impl TranslationState {
             .zip((16..).step_by(8))
             .collect();
 
+        let head = self.a.new_dynamic_label();
+
         self.frames.push(Frame {
             owner_proc: p.name.clone(),
             owner_proc_id: proc_id,
+            head,
+            subprocs: vec![],
+            num_args: p.args.len(),
             vars,
             consts,
             raw_locations,
         });
 
+        // Generate subprocs
+        for subproc in &p.block.procs {
+            let subframe = self.generate_proc(subproc)?;
+            self.frames.last_mut().unwrap().subprocs.push(subframe);
+        }
+
+        self.entry = self.a.offset();
+
         // Allocate slots
         dynasm!(self.a
+            ; =>head
             ; push rbp
-            ; lea rbp, [rsp + 16]
+            ; lea rbp, [rsp + 16 + (p.args.len() * 8) as i32]
             ; sub rsp, (p.num_slots() * 8) as i32
 
             // (function_id, prev_frame)
             ; mov QWORD [rsp + 0], proc_id as i32
             ; mov [rsp + 8], rbp
+
+            // Move rbp to start of arguments
+            ; sub rbp, (p.args.len() * 8) as i32
         );
 
         // Copy arguments
@@ -118,15 +165,8 @@ impl TranslationState {
             ; ret
         );
 
-        // Generate subprocs
-        for subproc in &p.block.procs {
-            self.generate_proc(subproc)?;
-        }
-
         // Release frame
-        self.frames.pop().unwrap();
-
-        Ok(())
+        Ok(self.frames.pop().unwrap())
     }
 
     fn last_frame(&self) -> &Frame {
@@ -146,8 +186,104 @@ impl TranslationState {
                 self.generate_expr(v)?;
                 self.write_var(k)?;
             }
-            _ => return Err(CodegenError::NotImplemented.into()),
+            StmtV::If(ref cond, ref t, ref f) => {
+                self.generate_l_expr(cond)?;
+                
+                let else_case = self.a.new_dynamic_label();
+                let end = self.a.new_dynamic_label();
+
+                dynasm!(self.a
+                    ; cmp rax, 0
+                    ; je =>else_case
+                );
+                self.generate_stmt(t)?;
+                dynasm!(self.a
+                    ; jmp =>end
+                    ; =>else_case
+                );
+                if let Some(ref f) = f {
+                    self.generate_stmt(f)?;
+                }
+                dynasm!(self.a
+                    ; =>end
+                );
+            }
+            StmtV::While(ref cond, ref i) => {
+                let head = self.a.new_dynamic_label();
+                let end = self.a.new_dynamic_label();
+
+                dynasm!(self.a
+                    ; =>head
+                );
+
+                self.generate_l_expr(cond)?;
+                dynasm!(self.a
+                    ; cmp rax, 0
+                    ; je =>end
+                );
+
+                self.generate_stmt(i)?;
+
+                dynasm!(self.a
+                    ; jmp =>head
+                );
+            }
+            StmtV::Call(ref target, ref args) => {
+                for arg in args.iter().rev() {
+                    self.generate_expr(arg)?;
+                    dynasm!(self.a ; push rax);
+                }
+                let target = self.lookup_call_target(target, args.len())?;
+                dynasm!(self.a ; call =>target);
+                dynasm!(self.a ; add rsp, (args.len() * 8) as i32);
+            }
+            StmtV::Body(ref inner) => {
+                self.generate_body(inner)?;
+            }
+            StmtV::Read(ref l) => {
+                dynasm!(self.a ; and rsp, -16); // System V stack alignment
+                for id in l {
+                    dynasm!(self.a ; call =>self.read_ext);
+                    self.write_var(id)?;
+                }
+                dynasm!(self.a ; mov rsp, rbp);
+            }
+            StmtV::Write(ref l) => {
+                dynasm!(self.a ; and rsp, -16); // System V stack alignment
+                for e in l {
+                    self.generate_expr(e)?;
+                    dynasm!(self.a ; mov rdi, rax ; call =>self.write_ext);
+                }
+                dynasm!(self.a ; mov rsp, rbp);
+            }
         }
+        Ok(())
+    }
+
+    fn generate_l_expr(&mut self, e: &LExpr) -> Result<()> {
+        match e.v {
+            LExprV::Lop(ref l, ref op, ref r) => {
+                self.generate_expr(l)?;
+                dynasm!(self.a ; push rax);
+                self.generate_expr(r)?;
+                dynasm!(self.a ; mov rcx, rax ; pop rdx);
+                dynasm!(self.a ; xor eax, eax); // clear upper bits
+                dynasm!(self.a ; cmp rdx, rcx);
+                match op {
+                    Lop::Eq => dynasm!(self.a ; sete al),
+                    Lop::Ne => dynasm!(self.a ; setne al),
+                    Lop::Lt => dynasm!(self.a ; setl al),
+                    Lop::Le => dynasm!(self.a ; setle al),
+                    Lop::Gt => dynasm!(self.a ; setg al),
+                    Lop::Ge => dynasm!(self.a ; setge al),
+                }
+            }
+            LExprV::Odd(ref e) => {
+                self.generate_expr(e)?;
+                dynasm!(self.a ; and rax, 1);
+            }
+        }
+
         Ok(())
     }
 
@@ -213,6 +349,25 @@ impl TranslationState {
         Ok(())
     }
 
+    fn lookup_call_target(&mut self, t: &Identifier, num_args: usize) -> Result<DynamicLabel> {
+        for frame in self.frames.iter().rev() {
+            if let Some(target) = frame.subprocs.iter().find(|x| &x.owner_proc == t) {
+                if target.num_args != num_args {
+                    return Err(CodegenError::ArgumentCountMismatch.into());
+                }
+                return Ok(target.head.clone());
+            }
+            if &frame.owner_proc == t {
+                if frame.num_args != num_args {
+                    return Err(CodegenError::ArgumentCountMismatch.into());
+                }
+                return Ok(frame.head.clone());
+            }
+        }
+
+        Err(CodegenError::ProcNotFound.into())
+    }
+
     fn lookup_var_indirect(&mut self, t: &Identifier) -> Result<i32> {
         for frame in self.frames.iter().rev() {
             if let Some(&offset) = frame.raw_locations.get(t) {
@@ -227,6 +382,7 @@ impl TranslationState {
                     ; je >fail
                     ; cmp r8, rdx
                     ; je >ok
+                    ; jmp <head
                     ; fail:
                     ; ud2
                     ; ok:
