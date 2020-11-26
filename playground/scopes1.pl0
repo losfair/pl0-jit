@@ -1,0 +1,46 @@
+program scopes1;
+
+var a, b;
+
+procedure level1();
+var b;
+
+procedure level2a();
+var a;
+begin
+a := 4;
+write(a);
+write(b)
+end;
+
+procedure level2b();
+begin
+write(a);
+write(b)
+end;
+
+procedure level2c();
+var a;
+begin
+a := 4;
+write(a);
+write(b);
+call level2b()
+end
+
+begin
+    b := 3;
+    write(a);
+    write(b);
+    call level2a();
+    call level2b();
+    call level2c()
+end
+
+begin
+    a := 1;
+    b := 2;
+    call level1();
+    write(a);
+    write(b)
+end
