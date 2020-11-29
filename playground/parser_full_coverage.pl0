@@ -1,0 +1,115 @@
+program parserFullCoverage;
+
+const a := 1, b := 2;
+var c, d;
+
+procedure proc1(x, y);
+begin
+    c := x + y;
+    d := x * y
+end;
+
+procedure proc2(x, y);
+begin
+    c := x - y;
+    d := x / y
+end;
+
+procedure proc3(x, y);
+begin
+    write(x);
+    write(y)
+end;
+
+procedure proc4();
+begin
+    read(c);
+    read(d)
+end;
+
+procedure proc5(x);
+begin
+    if odd x then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc6(x);
+begin
+    c := -x
+end;
+
+procedure proc7(x);
+begin
+    c := +x
+end;
+
+procedure proc8(x, y);
+begin
+    if x = y then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc9(x, y);
+begin
+    if x < y then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc10(x, y);
+begin
+    if x > y then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc11(x, y);
+begin
+    if x <= y then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc12(x, y);
+begin
+    if x >= y then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc13(x, y);
+begin
+    if x <> y then
+        c := 1
+    else
+        c := 0
+end;
+
+procedure proc14(x, y);
+begin
+    while x < y do x := x + 1
+end;
+
+procedure proc15(x, y);
+begin
+    if x <> y then
+        c := 1
+end;
+
+procedure proc16(x, y);
+begin
+    c := (x + y) * y + x / y
+end
+
+begin
+    call proc4();
+    call proc3(c, d)
+end
