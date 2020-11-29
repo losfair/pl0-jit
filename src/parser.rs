@@ -128,10 +128,10 @@ peg::parser! {
             =
                 "=" { Lop::Eq } /
                 "<>" { Lop::Ne } /
-                "<" { Lop::Lt } /
                 "<=" { Lop::Le } /
-                ">" { Lop::Gt } /
-                ">=" { Lop::Ge }
+                "<" { Lop::Lt } /
+                ">=" { Lop::Ge } /
+                ">" { Lop::Gt }
 
         rule factor_v() -> FactorV
             =
