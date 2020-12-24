@@ -226,6 +226,7 @@ impl TranslationState {
 
                 dynasm!(self.a
                     ; jmp =>head
+                    ; =>end
                 );
             }
             StmtV::Call(ref target, ref args) => {
