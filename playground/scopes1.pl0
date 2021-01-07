@@ -1,27 +1,35 @@
 program scopes1;
 
+const id := 1000;
 var a, b;
 
 procedure level1();
+const id := 1100;
 var b;
 
 procedure level2a();
+const id := 1200;
 var a;
 begin
+write(id);
 a := 4;
 write(a);
 write(b)
 end;
 
 procedure level2b();
+const id := 1210;
 begin
+write(id);
 write(a);
 write(b)
 end;
 
 procedure level2c();
+const id := 1220;
 var a;
 begin
+write(id);
 a := 4;
 write(a);
 write(b);
@@ -29,6 +37,7 @@ call level2b()
 end
 
 begin
+    write(id);
     b := 3;
     write(a);
     write(b);
@@ -38,6 +47,7 @@ begin
 end
 
 begin
+    write(id);
     a := 1;
     b := 2;
     call level1();
